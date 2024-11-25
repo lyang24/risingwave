@@ -1,54 +1,30 @@
-/*
- * Copyright 2024 RisingWave Labs
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- */
-
-import { Box, Button, Stack, Textarea } from "@chakra-ui/react"
-import { Fragment } from "react"
-import Title from "../components/Title"
-
-import React, { useState } from "react"
-
-import ReactFlow, {
-  Background,
-  Controls,
-  Edge,
-  MiniMap,
-  Node,
-} from "react-flow-renderer"
-import styled from "styled-components"
-import NodeType from "./node"
-
+import { Box, Button, Stack, Textarea } from "@chakra-ui/react";
+import { Fragment } from "react";
+import Title from "../components/Title";
+import React, { useState } from "react";
+import ReactFlow, { Background, Controls, MiniMap, Node, Edge } from "react-flow-renderer";
+import styled from "styled-components";
+import NodeType from "./node";
+import { Graphviz } from "graphviz-react";
 import * as d3 from "d3"
+import { parse } from "graphlib-dot";
 
 const ContainerDiv = styled(Box)`
   font-family: sans-serif;
   text-align: left;
-`
+`;
 
 const DemoArea = styled(Box)`
   width: 100%;
   height: 80vh;
-`
+`;
 
 const position = {
   x: 200,
   y: 100,
-}
+};
 
-const nodeTypes = { node: NodeType }
+const nodeTypes = { node: NodeType };
 
 function getColor() {
   return (
@@ -59,7 +35,7 @@ function getColor() {
     "%," +
     (85 + 10 * Math.random()) +
     "%)"
-  )
+  );
 }
 
 function getStyle() {
@@ -70,39 +46,34 @@ function getStyle() {
     border: "0.5px solid black",
     padding: "5px",
     "border-radius": "5px",
-  }
+  };
 }
 
-function layoutElements(
-  nodeList: any,
-  edgeList: any,
-  stageToNode: { [key: string]: number },
-  rootStageId: string
-) {
-  const idToNode = new Map()
-  nodeList.forEach((node: { id: any }) => {
-    idToNode.set(node.id, [{ id: node.id, children: [] }, node])
-  })
+function layoutElements(nodeList, edgeList, stageToNode, rootStageId) {
+  const idToNode = new Map();
+  nodeList.forEach((node) => {
+    idToNode.set(node.id, [{ id: node.id, children: [] }, node]);
+  });
 
-  edgeList.forEach((edge: any) => {
-    const sourceNode = idToNode.get(edge.source)[0]
-    const targetNode = idToNode.get(edge.target)[0]
-    sourceNode.children.push(targetNode)
-  })
+  edgeList.forEach((edge) => {
+    const sourceNode = idToNode.get(edge.source)[0];
+    const targetNode = idToNode.get(edge.target)[0];
+    sourceNode.children.push(targetNode);
+  });
 
-  var rootNode = idToNode.get(stageToNode[rootStageId].toString())[0]
-  var root = d3.hierarchy(rootNode)
-  var tree = d3.tree().nodeSize([60, 180])
-  const treeRoot = tree(root)
+  var rootNode = idToNode.get(stageToNode[rootStageId].toString())[0];
+  var root = d3.hierarchy(rootNode);
+  var tree = d3.tree().nodeSize([60, 180]);
+  const treeRoot = tree(root);
 
-  treeRoot.each((treeNode: { x: number; y: number; data: any }) => {
-    const node = idToNode.get(treeNode.data.id)[1]
-    if (node == undefined) return
+  treeRoot.each((treeNode) => {
+    const node = idToNode.get(treeNode.data.id)[1];
+    if (node == undefined) return;
     node.position = {
       x: treeNode.y,
       y: treeNode.x,
-    }
-  })
+    };
+  });
 }
 
 function parseSubElements(
@@ -152,19 +123,6 @@ function parseSubElements(
   }
 }
 
-type PlanNode = {
-  plan_node_id: number
-  plan_node_type: string
-  schema: [any]
-  children: [PlanNode]
-  source_stage_id: number
-}
-
-type Stage = {
-  root: PlanNode
-  children: [number]
-  source_stage_id: number
-}
 
 function parseElements(input: any) {
   var nodeList: Node[] = []
@@ -222,25 +180,45 @@ function parseElements(input: any) {
 }
 
 export default function Explain() {
-  const [input, setInput] = useState("")
-  const [isUpdate, setIsUpdate] = useState(false)
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
+  const [input, setInput] = useState(""); // Input state for DOT or JSON
+  const [isUpdate, setIsUpdate] = useState(false); // Flag to track changes in input
+  const [nodes, setNodes] = useState([]); // ReactFlow nodes (JSON)
+  const [edges, setEdges] = useState([]); // ReactFlow edges (JSON)
+  const [dotInput, setDotInput] = useState(""); // DOT input for Graphviz
+  const [isDotParsed, setIsDotParsed] = useState(false); // Flag for DOT parsing
 
-  const handleChange = (event: {
-    target: { value: React.SetStateAction<string> }
-  }) => {
-    setInput(event.target.value)
-    setIsUpdate(true)
-  }
-  const handleClick = () => {
+  const handleChange = (event) => {
+    setInput(event.target.value);
+    setIsUpdate(true);
+  };
+
+  const handleParseJson = () => {
     if (!isUpdate) return
-    const jsonInput = JSON.parse(input)
-    var elements = parseElements(jsonInput)
-    setEdges(elements.edge)
-    setNodes(elements.node)
-    setIsUpdate(false)
-  }
+    try {
+      const jsonInput = JSON.parse(input)
+      var elements = parseElements(jsonInput)
+      setEdges(elements.edge)
+      setNodes(elements.node)
+      setIsUpdate(false)
+      setIsDotParsed(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleParseDot = () => {
+    if (!isUpdate) return
+    try {
+      // Validate
+      parse(input);
+      // Attempt to set DOT input for Graphviz rendering
+      setDotInput(input);
+      setIsDotParsed(true); // Set flag to render Graphviz
+    } catch (error) {
+      alert("Invalid DOT input! Please provide valid DOT syntax."); // Display an error alert
+      console.error("DOT parsing error:", error); // Log the error for debugging
+    }
+  };
 
   return (
     <Fragment>
@@ -248,31 +226,51 @@ export default function Explain() {
         <Title>Distributed Plan Explain</Title>
         <Stack direction="row" spacing={4} align="center">
           <Textarea
-            name="input json"
-            placeholder="Explain"
+            name="input graph"
+            placeholder="Input DOT or JSON"
             value={input}
             onChange={handleChange}
             style={{ width: "1000px", height: "100px" }}
           />
           <Button
             colorScheme="blue"
-            onClick={handleClick}
+            onClick={handleParseJson}
             style={{ width: "80px", height: "100px" }}
           >
-            Click
+            Parse JSON
+          </Button>
+          <Button
+            colorScheme="green"
+            onClick={handleParseDot}
+            style={{ width: "80px", height: "100px" }}
+          >
+            Parse DOT
           </Button>
         </Stack>
 
         <ContainerDiv fluid>
           <DemoArea>
-            <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes}>
-              <MiniMap />
-              <Controls />
-              <Background color="#aaa" gap={16} />
-            </ReactFlow>
+            {/* Render ReactFlow if nodes and edges exist */}
+            {nodes.length > 0 && edges.length > 0 && !isDotParsed && (
+              <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes}>
+                <MiniMap />
+                <Controls />
+                <Background color="#aaa" gap={16} />
+              </ReactFlow>
+            )}
+
+            {/* Render Graphviz visualization only when DOT input is provided */}
+            {isDotParsed && dotInput && (
+              <Box mt={4}>
+                <Graphviz
+                  dot={dotInput} // Pass the DOT input for visualization
+                  options={{ width: 600, height: 400 }}
+                />
+              </Box>
+            )}
           </DemoArea>
         </ContainerDiv>
       </Box>
     </Fragment>
-  )
+  );
 }

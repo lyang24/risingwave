@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
+use petgraph::graph::NodeIndex;
+use petgraph::{Directed, Graph};
 use risingwave_pb::stream_plan::stream_fragment_graph::{
     StreamFragment as StreamFragmentProto, StreamFragmentEdge as StreamFragmentEdgeProto,
 };
@@ -160,5 +162,37 @@ impl StreamFragmentGraph {
                     e.to_report_string()
                 )
             })
+    }
+
+    /// Converts the `StreamFragmentGraph` into a `petgraph::graph::Graph<String, String>`.
+    pub fn to_petgraph(&self) -> Graph<String, String, Directed> {
+        let mut graph = Graph::<String, String, Directed>::new();
+
+        let mut node_indices: BTreeMap<u32, NodeIndex> = BTreeMap::new();
+
+        // Add fragments as nodes
+        for (&fragment_id, fragment) in &self.fragments {
+            // TODO: format output.
+            // consider verboseness, width, boundaries.
+            let label = format!("Fragment {:?}", fragment);
+            let node_index = graph.add_node(label);
+            node_indices.insert(fragment_id, node_index);
+        }
+
+        // Add all edges
+        for (&(upstream_id, downstream_id), edge_proto) in &self.edges {
+            if let (Some(&upstream_node), Some(&downstream_node)) = (
+                node_indices.get(&upstream_id),
+                node_indices.get(&downstream_id),
+            ) {
+                let edge_label = format!(
+                    "Edge ID: {}\n Dispacting strategy: {:?}",
+                    edge_proto.link_id, edge_proto.dispatch_strategy,
+                );
+                graph.add_edge(upstream_node, downstream_node, edge_label);
+            }
+        }
+
+        graph
     }
 }

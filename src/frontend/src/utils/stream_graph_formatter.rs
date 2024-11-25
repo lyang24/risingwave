@@ -16,6 +16,9 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 
 use itertools::Itertools;
+use petgraph::dot::Dot;
+use petgraph::graph::NodeIndex;
+use petgraph::{Directed, Graph};
 use pretty_xmlish::{Pretty, PrettyConfig};
 use risingwave_common::util::stream_graph_visitor;
 use risingwave_pb::catalog::Table;
@@ -34,6 +37,44 @@ pub fn explain_stream_graph(graph: &StreamFragmentGraph, is_verbose: bool) -> St
     };
     StreamGraphFormatter::new(is_verbose).explain_graph(graph, &mut config, &mut output);
     output
+}
+
+pub fn explain_stream_graph_as_dot(sg: &StreamFragmentGraph) -> String {
+    let graph = stream_graph_to_petgraph(sg);
+    let dot = Dot::new(&graph);
+    dot.to_string()
+}
+
+pub fn stream_graph_to_petgraph(sg: &StreamFragmentGraph) -> Graph<String, String, Directed> {
+    let mut graph = Graph::<String, String, Directed>::new();
+
+    // Map fragment IDs to graph nodes
+    let mut node_indices: HashMap<u32, NodeIndex> = HashMap::new();
+
+    // Add fragments as nodes
+    for (fragment_id, fragment) in &sg.fragments {
+        // TODO: format label outputs (ref StreamGraphFormatter).
+        // consider verboseness, width, boundaries.
+        let label = format!("Fragment: \n{:?}", fragment);
+        let node_index = graph.add_node(label);
+        node_indices.insert(*fragment_id, node_index);
+    }
+
+    // Add edges
+    for edge in &sg.edges {
+        if let (Some(&upstream_node), Some(&downstream_node)) = (
+            node_indices.get(&edge.upstream_id),
+            node_indices.get(&edge.downstream_id),
+        ) {
+            let edge_label = format!(
+                "Edge ID: {}\n Dispacting strategy: {:?}",
+                edge.link_id, edge.dispatch_strategy,
+            );
+            graph.add_edge(upstream_node, downstream_node, edge_label);
+        }
+    }
+
+    graph
 }
 
 /// A formatter to display the final stream plan graph, used for `explain (distsql) create

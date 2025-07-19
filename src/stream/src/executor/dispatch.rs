@@ -818,8 +818,8 @@ impl RoundRobinDataDispatcher {
 
 impl Dispatcher for RoundRobinDataDispatcher {
     async fn dispatch_data(&mut self, chunk: StreamChunk) -> StreamResult<()> {
-        let chunk = self.output_mapping.apply(chunk);
-
+        let mut chunk = self.output_mapping.apply(chunk);
+        chunk = chunk.compact();
         self.outputs[self.cur]
             .send(DispatcherMessageBatch::Chunk(chunk))
             .await?;
@@ -958,7 +958,8 @@ impl Dispatcher for HashDataDispatcher {
         let mut new_ops: Vec<Op> = Vec::with_capacity(chunk.capacity());
 
         // Apply output indices after calculating the vnode.
-        let chunk = self.output_mapping.apply(chunk);
+        let mut chunk = self.output_mapping.apply(chunk);
+        chunk = chunk.compact();
 
         for ((vnode, &op), visible) in vnodes
             .iter()
@@ -1091,7 +1092,8 @@ impl BroadcastDispatcher {
 
 impl Dispatcher for BroadcastDispatcher {
     async fn dispatch_data(&mut self, chunk: StreamChunk) -> StreamResult<()> {
-        let chunk = self.output_mapping.apply(chunk);
+        let mut chunk = self.output_mapping.apply(chunk);
+        chunk = chunk.compact();
         broadcast_concurrent(
             self.outputs.values_mut(),
             DispatcherMessageBatch::Chunk(chunk),
@@ -1203,7 +1205,8 @@ impl Dispatcher for SimpleDispatcher {
             .exactly_one()
             .expect("expect exactly one output");
 
-        let chunk = self.output_mapping.apply(chunk);
+        let mut chunk = self.output_mapping.apply(chunk);
+        chunk = chunk.compact();
         output.send(DispatcherMessageBatch::Chunk(chunk)).await
     }
 

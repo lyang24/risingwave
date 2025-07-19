@@ -1,0 +1,48 @@
+# Benchmark configuration
+benchmark_name: shuffle_or_compact_vis50
+
+# SQL to set up the initial schema and data (run once)
+setup_sql: |
+  CREATE TABLE source_data (    
+      id INT,    
+      user_id INT,    
+      category VARCHAR,    
+      amount DECIMAL,    
+      timestamp TIMESTAMP    
+  );
+# SQL to prepare the data before each run
+prepare_sql: |
+  INSERT INTO source_data   
+  SELECT   
+      generate_series AS id,  
+      (generate_series % 1000) + 1 AS user_id,  
+      'category_' || (generate_series % 10) AS category,  
+      (generate_series % 990) + 10 AS amount,  
+      NOW() + (generate_series || ' seconds')::INTERVAL AS timestamp  
+  FROM generate_series(1, 10000000);
+
+# SQL to clean up after each run
+conclude_sql: |
+  DELETE FROM source_data;
+
+# SQL to clean up everything after all runs are complete
+cleanup_sql: |
+  DROP TABLE IF EXISTS source_data CASCADE;
+
+# SQL to benchmark
+benchmark_sql: |
+  CREATE MATERIALIZED VIEW filtered_aggregated AS
+  SELECT
+      user_id,  
+      category,
+      COUNT(*) as transaction_count,  
+      SUM(amount) as total_amount,  
+      AVG(amount) as avg_amount  
+  FROM source_data  
+  WHERE   
+    user_id % 10 < 5
+  GROUP BY user_id, category  
+  HAVING COUNT(*) > 5;
+
+# Number of times to run the benchmark
+runs: 3

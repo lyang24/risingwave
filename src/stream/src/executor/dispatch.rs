@@ -939,10 +939,12 @@ impl Dispatcher for HashDataDispatcher {
         Ok(())
     }
 
-    async fn dispatch_data(&mut self, chunk: StreamChunk) -> StreamResult<()> {
+    async fn dispatch_data(&mut self, mut chunk: StreamChunk) -> StreamResult<()> {
         // A chunk can be shuffled into multiple output chunks that to be sent to downstreams.
         // In these output chunks, the only difference are visibility map, which is calculated
         // by the hash value of each line in the input chunk.
+        
+        chunk = chunk.compact();
         let num_outputs = self.outputs.len();
 
         // get hash value of every line by its key
@@ -957,9 +959,7 @@ impl Dispatcher for HashDataDispatcher {
         let mut last_vnode_when_update_delete = None;
         let mut new_ops: Vec<Op> = Vec::with_capacity(chunk.capacity());
 
-        // Apply output indices after calculating the vnode.
-        let mut chunk = self.output_mapping.apply(chunk);
-        chunk = chunk.compact();
+        chunk = self.output_mapping.apply(chunk);
 
         for ((vnode, &op), visible) in vnodes
             .iter()

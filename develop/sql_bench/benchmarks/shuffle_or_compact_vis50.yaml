@@ -10,6 +10,7 @@ setup_sql: |
       amount DECIMAL,    
       timestamp TIMESTAMP    
   );
+
 # SQL to prepare the data before each run
 prepare_sql: |
   INSERT INTO source_data   
@@ -19,11 +20,14 @@ prepare_sql: |
       'category_' || (generate_series % 10) AS category,  
       (generate_series % 990) + 10 AS amount,  
       NOW() + (generate_series || ' seconds')::INTERVAL AS timestamp  
-  FROM generate_series(1, 10000000);
+  FROM generate_series(1, 1000000);
+  FLUSH;
 
 # SQL to clean up after each run
 conclude_sql: |
   DELETE FROM source_data;
+  DROP MATERIALIZED VIEW IF EXISTS filtered_aggregated;
+  FLUSH;
 
 # SQL to clean up everything after all runs are complete
 cleanup_sql: |
